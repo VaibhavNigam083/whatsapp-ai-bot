@@ -8,7 +8,9 @@ app = Flask(__name__)
 ACCESS_TOKEN = os.environ['WHATSAPP_TOKEN']
 PHONE_NUMBER_ID = os.environ['PHONE_NUMBER_ID']
 VERIFY_TOKEN = os.environ['VERIFY_TOKEN']
-openai.api_key = os.environ['OPENAI_API_KEY']
+
+# Initialize OpenAI client
+client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -18,12 +20,14 @@ def webhook():
         from_number = message['from']
         text = message['text']['body']
 
-        # Call OpenAI
-        response = openai.ChatCompletion.create(
+        # Call OpenAI using new SDK format
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": text}]
+            messages=[
+                {"role": "user", "content": text}
+            ]
         )
-        reply = response['choices'][0]['message']['content']
+        reply = response.choices[0].message.content
 
         # Send reply via WhatsApp
         url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
