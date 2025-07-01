@@ -1,6 +1,5 @@
 from flask import Flask, request
 import requests
-import openai
 import os
 
 app = Flask(__name__)
@@ -9,8 +8,8 @@ ACCESS_TOKEN = os.environ['WHATSAPP_TOKEN']
 PHONE_NUMBER_ID = os.environ['PHONE_NUMBER_ID']
 VERIFY_TOKEN = os.environ['VERIFY_TOKEN']
 
-# Initialize OpenAI client
-client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+# Set your Copilot Studio webhook URL (Power Automate HTTP Request trigger)
+COPILOT_WEBHOOK_URL = os.environ['COPILOT_WEBHOOK_URL']  # Set this in Render
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -18,16 +17,19 @@ def webhook():
     try:
         message = data['entry'][0]['changes'][0]['value']['messages'][0]
         from_number = message['from']
-        text = message['text']['body']
+        user_text = message['text']['body']
 
-        # Call OpenAI using new SDK format
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "user", "content": text}
-            ]
+        # Send message to Microsoft Copilot Studio via Power Automate HTTP POST
+        copilot_response = requests.post(
+            COPILOT_WEBHOOK_URL,
+            json={"text": user_text}
         )
-        reply = response.choices[0].message.content
+
+        if copilot_response.status_code == 200:
+            copilot_data = copilot_response.json()
+            reply = copilot_data.get('reply', 'Sorry, I did not understand that.')
+        else:
+            reply = "Bot error: could not get response."
 
         # Send reply via WhatsApp
         url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
@@ -41,8 +43,10 @@ def webhook():
             "text": {"body": reply}
         }
         requests.post(url, headers=headers, json=payload)
+
     except Exception as e:
         print(f"Error: {e}")
+
     return "OK", 200
 
 @app.route('/webhook', methods=['GET'])
